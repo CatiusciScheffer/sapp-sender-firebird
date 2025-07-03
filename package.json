@@ -1,0 +1,47 @@
+{
+  "name": "MonitorWhatsApp",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "Um gateway para monitorar e enviar mensagens de WhatsApp a partir de um banco de dados.",
+  "author": "Catiusci P. C. Scheffer <cpcscheffer@outlook.com>",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.MonitorWhatsapp.whatsapp",
+    "asarUnpack": [
+      "**/node_modules/puppeteer/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "trayIcon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "**/*",
+      "!*.env"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/"
+      }
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^4.18.0",
+    "node-firebird": "^1.1.9",
+    "qrcode": "^1.5.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.20.0"
+  },
+  "devDependencies": {
+    "electron": "^26.0.0",
+    "electron-builder": "^23.6.0"
+  }
+}
