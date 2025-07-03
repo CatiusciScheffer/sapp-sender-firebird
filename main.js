@@ -1,36 +1,28 @@
 // =======================================================
-// 1. IMPORTS E CONFIGURAÇÕES INICIAIS
+// 1. IMPORTS E DEFINIÇÕES GLOBAIS
 // =======================================================
 const { app, Tray, Menu, BrowserWindow, dialog } = require('electron');
 app.disableHardwareAcceleration();
-const isDev = !app.isPackaged;
-
-if (isDev) {
-  // Em desenvolvimento, carrega o .env da raiz do projeto
-  require('dotenv').config();
-} else {
-  // Em produção (app empacotado), carrega o .env da pasta do executável
-  const path = require('path');
-  require('dotenv').config({
-    path: path.join(path.dirname(app.getPath('exe')), '.env'),
-  });
-}
-
-const qrcode = require('qrcode');
 const path = require('path');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const express = require('express');
 const fs = require('fs');
-const Firebird = require('node-firebird');
 const os = require('os');
 const crypto = require('crypto');
+const qrcode = require('qrcode');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const express = require('express');
+const Firebird = require('node-firebird');
 
-// --- LÓGICA DE PAUSA VARIÁVEL ---
-const MIN_SEND_DELAY_MS = parseInt(process.env.MIN_SEND_DELAY_MS, 10) || 2000;
-const MAX_SEND_DELAY_MS = parseInt(process.env.MAX_SEND_DELAY_MS, 10) || 5000;
+// Variáveis globais que serão definidas depois
+let dbOptions;
+let MIN_SEND_DELAY_MS;
+let MAX_SEND_DELAY_MS;
+let tray = null;
+let client;
+let isWhatsAppReady = false;
 
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
+// =======================================================
+// 2. FUNÇÕES AUXILIARES E DE LÓGICA DE NEGÓCIO
+// =======================================================
 // função para obter um tempo de pausa aleatório dentro do intervalo
 function getRandomDelay() {
   // Garante que o mínimo não seja maior que o máximo, caso o .env seja configurado errado
@@ -40,24 +32,48 @@ function getRandomDelay() {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const rawDbPath = process.env.DB_PATH || '';
-const correctedDbPath = rawDbPath.replace(/\\/g, '/');
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const dbOptions = {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: correctedDbPath,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  lowercase_keys: false,
-  role: null,
-  pageSize: 4096,
-};
+//função para tornar os textos únicos
+function generateInvisibleSuffix(length = 6) {
+  const invisibleChars = [
+    '\u200B', // Zero Width Space
+    '\u200C', // Zero Width Non-Joiner
+    '\u200D', // Zero Width Joiner
+    '\u2060', // Word Joiner
+    '\uFEFF', // Zero Width No-Break Space
+  ];
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+  }
+  return result;
+}
 
-//variáveis globais
-let tray = null;
-let client;
-let isWhatsAppReady = false; // Flag para controlar se o WhatsApp está pronto
+//função para tornar os arquivos unicos
+async function createUniqueFileCopy(originalPath) {
+  if (!fs.existsSync(originalPath)) {
+    throw new Error(`Arquivo anexo original não encontrado: ${originalPath}`);
+  }
+
+  // 1. Gera um nome de arquivo temporário único
+  const tempDir = os.tmpdir();
+  const extension = path.extname(originalPath);
+  const tempFileName = `${path.basename(
+    originalPath,
+    extension
+  )}-${crypto.randomUUID()}${extension}`;
+  const tempFilePath = path.join(tempDir, tempFileName);
+
+  // 2. Copia o arquivo original para o local temporário
+  await fs.promises.copyFile(originalPath, tempFilePath);
+
+  // 3. Adiciona um "carimbo" único (UUID) no final do arquivo para alterar seu hash
+  const uniqueStamp = crypto.randomUUID();
+  await fs.promises.appendFile(tempFilePath, `\n<!-- ${uniqueStamp} -->`); // Adiciona de forma segura para a maioria dos tipos
+
+  return tempFilePath;
+}
 
 // =======================================================
 // 2. FUNÇÕES AUXILIARES DE BANCO DE DADOS
@@ -102,45 +118,6 @@ async function atualizarStatusAck(msgSerializedId, status) {
 // =======================================================
 // 3. FUNÇÕES PRINCIPAIS DA APLICAÇÃO
 // =======================================================
-
-function generateInvisibleSuffix(length = 6) {
-  const invisibleChars = [
-    '\u200B', // Zero Width Space
-    '\u200C', // Zero Width Non-Joiner
-    '\u200D', // Zero Width Joiner
-    '\u2060', // Word Joiner
-    '\uFEFF', // Zero Width No-Break Space
-  ];
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
-  }
-  return result;
-}
-
-async function createUniqueFileCopy(originalPath) {
-  if (!fs.existsSync(originalPath)) {
-    throw new Error(`Arquivo anexo original não encontrado: ${originalPath}`);
-  }
-
-  // 1. Gera um nome de arquivo temporário único
-  const tempDir = os.tmpdir();
-  const extension = path.extname(originalPath);
-  const tempFileName = `${path.basename(
-    originalPath,
-    extension
-  )}-${crypto.randomUUID()}${extension}`;
-  const tempFilePath = path.join(tempDir, tempFileName);
-
-  // 2. Copia o arquivo original para o local temporário
-  await fs.promises.copyFile(originalPath, tempFilePath);
-
-  // 3. Adiciona um "carimbo" único (UUID) no final do arquivo para alterar seu hash
-  const uniqueStamp = crypto.randomUUID();
-  await fs.promises.appendFile(tempFilePath, `\n<!-- ${uniqueStamp} -->`); // Adiciona de forma segura para a maioria dos tipos
-
-  return tempFilePath;
-}
 
 function sendMessageAndCapture(chatId, content) {
   return new Promise((resolve, reject) => {
@@ -438,15 +415,23 @@ function startWhatsApp() {
 
   // Anexa o handler de ACK
   setupAckHandler(client);
+  console.log('▶️  Iniciando a inicialização do cliente WhatsApp...');
 
-  client.initialize().catch((err) => {
-    console.error('FALHA FATAL NA INICIALIZAÇÃO DO CLIENTE:', err);
-    dialog.showErrorBox(
-      'Erro Crítico',
-      'Não foi possível iniciar o WhatsApp...\n\n' + err.message
-    );
-    app.quit();
-  });
+  client
+    .initialize()
+    .then(() => {
+      console.log(
+        "✅ .initialize() CONCLUÍDO com sucesso. Aguardando evento 'ready'..."
+      );
+    })
+    .catch((err) => {
+      console.error('❌ FALHA FATAL NA INICIALIZAÇÃO DO CLIENTE:', err);
+      dialog.showErrorBox(
+        'Erro Crítico',
+        'Não foi possível iniciar o WhatsApp...\n\n' + err.message
+      );
+      app.quit();
+    });
 }
 
 let mainWindow;
@@ -478,9 +463,62 @@ function createTray() {
 // 4. PONTO DE ENTRADA DO ELECTRON
 // =======================================================
 app.whenReady().then(() => {
+  // ETAPA 1: Verificar e configurar o .env.
+  const envPath = app.isPackaged
+    ? path.join(path.dirname(app.getPath('exe')), '.env')
+    : path.join(__dirname, '.env');
+
+  if (!fs.existsSync(envPath)) {
+    const envTemplate = `# Configurações do Banco de Dados Firebird
+# Por favor, preencha as informações abaixo e reinicie a aplicação.
+DB_HOST=127.0.0.1
+DB_PORT=3050
+DB_PATH=
+DB_USER=SYSDBA
+DB_PASSWORD=masterkey
+
+# Pausa em milissegundos entre envios
+MIN_SEND_DELAY_MS=2000
+MAX_SEND_DELAY_MS=5000
+`;
+    try {
+      fs.writeFileSync(envPath, envTemplate);
+      dialog.showErrorBox(
+        'Configuração Necessária',
+        `O arquivo de configuração (.env) foi criado em:\n\n${envPath}\n\nPor favor, edite-o com os dados do seu banco e reinicie o programa.`
+      );
+    } catch (err) {
+      dialog.showErrorBox(
+        'Erro Crítico',
+        `Não foi possível criar o arquivo .env: ${err.message}`
+      );
+    }
+    return app.quit();
+  }
+
+  // ETAPA 2: Se o .env existe, carregar as variáveis e definir as configurações.
+  require('dotenv').config({ path: envPath });
+
+  const rawDbPath = process.env.DB_PATH || '';
+  const correctedDbPath = rawDbPath.replace(/\\/g, '/');
+
+  dbOptions = {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: correctedDbPath,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    lowercase_keys: false,
+    role: null,
+    pageSize: 4096,
+  };
+
+  MIN_SEND_DELAY_MS = parseInt(process.env.MIN_SEND_DELAY_MS, 10) || 2000;
+  MAX_SEND_DELAY_MS = parseInt(process.env.MAX_SEND_DELAY_MS, 10) || 5000;
+
   mainWindow = new BrowserWindow({
-    width: 500,
-    height: 800,
+    width: 700,
+    height: 650,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -492,7 +530,7 @@ app.whenReady().then(() => {
   createTray();
   startWhatsApp();
 
-  // A API continua funcionando normalmente para envios "on-demand"
+  // Iniciar a API Express
   const api = express();
   api.use(express.json());
 

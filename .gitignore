@@ -1,9 +1,17 @@
+# Dependências do Node.js
 node_modules
+# Configurações, Senhas e segredos
 .env
-wwebjs_auth/
-dist/
-sql/
+# modelo .env
+x.txt
+#Arquivos de log
 *.log
 npm-debug.log*
+# arquivos do sistema operacional
 .DS_Store
 Thumbs.db
+# Arquivos de sessão do whatsapp-web.js 
+.wwebjs_auth/
+# pasta com executável
+dist/
+
