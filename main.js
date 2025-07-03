@@ -474,8 +474,8 @@ app.whenReady().then(() => {
 DB_HOST=127.0.0.1
 DB_PORT=3050
 DB_PATH=
-DB_USER=SYSDBA
-DB_PASSWORD=masterkey
+DB_USER=
+DB_PASSWORD=
 
 # Pausa em milissegundos entre envios
 MIN_SEND_DELAY_MS=2000
