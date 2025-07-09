@@ -355,13 +355,35 @@ function setupAckHandler(client) {
 }
 
 // --- FUNÇÃO startWhatsApp ---
-function startWhatsApp() {
+function startWhatsApp(customChromePath = null) {
+  let browserPath;
+
+  if (customChromePath) {
+    // 1. Prioridade máxima: o caminho definido no .env
+    console.log(
+      `🔵 Usando caminho do Chrome definido no .env: ${customChromePath}`
+    );
+    browserPath = customChromePath;
+  } else if (app.isPackaged) {
+    // 2. Se estiver empacotado e sem .env, usa o Chromium interno
+    console.log('📦 App está empacotado. Usando Chromium interno.');
+    browserPath = path.join(
+      process.resourcesPath,
+      'puppeteer/chrome-win/chrome.exe'
+    );
+  } else {
+    // 3. Em modo de desenvolvimento, deixa o Puppeteer decidir
+    console.log(
+      '🔧 Modo de desenvolvimento. Puppeteer irá gerenciar o navegador.'
+    );
+    browserPath = undefined;
+  }
+
   client = new Client({
     authStrategy: new LocalAuth({ clientId: 'meu-app' }),
     puppeteer: {
-      // executablePath:
-      //   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      headless: true,
+      executablePath: browserPath,
+      headless: app.isPackaged, // Fica visível em dev, oculto em produção
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -371,6 +393,7 @@ function startWhatsApp() {
     },
   });
 
+  // O resto da sua função (client.on, etc) continua aqui...
   client.on('qr', async (qr) => {
     isWhatsAppReady = false;
     const qrDataUrl = await qrcode.toDataURL(qr);
@@ -405,7 +428,7 @@ function startWhatsApp() {
     client
       .destroy()
       .catch((err) => console.error('Erro ao destruir cliente:', err));
-    setTimeout(startWhatsApp, 10000);
+    setTimeout(() => startWhatsApp(customChromePath), 10000); // Passa o caminho novamente na reconexão
   });
 
   // Listener genérico de mensagens recebidas
@@ -415,23 +438,17 @@ function startWhatsApp() {
 
   // Anexa o handler de ACK
   setupAckHandler(client);
-  console.log('▶️  Iniciando a inicialização do cliente WhatsApp...');
 
-  client
-    .initialize()
-    .then(() => {
-      console.log(
-        "✅ .initialize() CONCLUÍDO com sucesso. Aguardando evento 'ready'..."
-      );
-    })
-    .catch((err) => {
-      console.error('❌ FALHA FATAL NA INICIALIZAÇÃO DO CLIENTE:', err);
-      dialog.showErrorBox(
-        'Erro Crítico',
-        'Não foi possível iniciar o WhatsApp...\n\n' + err.message
-      );
-      app.quit();
-    });
+  console.log('▶️  Iniciando a inicialização do cliente WhatsApp...');
+  client.initialize().catch((err) => {
+    console.error('FALHA FATAL NA INICIALIZAÇÃO DO CLIENTE:', err);
+    dialog.showErrorBox(
+      'Erro Crítico',
+      'Não foi possível iniciar o WhatsApp...\nVerifique se o caminho do Chrome no arquivo .env está correto ou remova-o para usar a versão interna.\n\n' +
+        err.message
+    );
+    app.quit();
+  });
 }
 
 let mainWindow;
@@ -473,13 +490,18 @@ app.whenReady().then(() => {
 # Por favor, preencha as informações abaixo e reinicie a aplicação.
 DB_HOST=127.0.0.1
 DB_PORT=3050
-DB_PATH=
+DB_PATH=C:\\caminho\\para\\seu\\banco.fdb
 DB_USER=SYSDBA
 DB_PASSWORD=masterkey
 
 # Pausa em milissegundos entre envios
 MIN_SEND_DELAY_MS=2000
 MAX_SEND_DELAY_MS=5000
+
+# (OPCIONAL) Caminho para o executável do Chrome, caso o padrão falhe.
+# Use barras duplas no Windows (ex: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe)
+# Deixe em branco para usar o navegador interno do aplicativo.
+CHROME_EXEC_PATH=
 `;
     try {
       fs.writeFileSync(envPath, envTemplate);
@@ -499,6 +521,7 @@ MAX_SEND_DELAY_MS=5000
   // ETAPA 2: Se o .env existe, carregar as variáveis e definir as configurações.
   require('dotenv').config({ path: envPath });
 
+  const customChromePath = process.env.CHROME_EXEC_PATH || null;
   const rawDbPath = process.env.DB_PATH || '';
   const correctedDbPath = rawDbPath.replace(/\\/g, '/');
 
@@ -517,7 +540,7 @@ MAX_SEND_DELAY_MS=5000
   MAX_SEND_DELAY_MS = parseInt(process.env.MAX_SEND_DELAY_MS, 10) || 5000;
 
   mainWindow = new BrowserWindow({
-    width: 700,
+    width: 650,
     height: 650,
     show: false,
     webPreferences: {
@@ -528,7 +551,7 @@ MAX_SEND_DELAY_MS=5000
 
   mainWindow.loadFile('qr.html');
   createTray();
-  startWhatsApp();
+  startWhatsApp(customChromePath);
 
   // Iniciar a API Express
   const api = express();
