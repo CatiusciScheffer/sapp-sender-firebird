@@ -178,7 +178,6 @@ async function processarFilaDoBanco() {
     );
 
     for (const row of rows) {
-      // ... (código de setup inicial, que já estava correto) ...
       const { ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO } = row;
       await atualizarStatusTarefa(ID, 'PROCESSANDO');
       const sqlSelectMensagens = `SELECT TIPO_MSG, CONTEUDO FROM WHATS_MENSAGENS WHERE ID_ENVIO = ?`;
@@ -186,13 +185,31 @@ async function processarFilaDoBanco() {
         db.query(sqlSelectMensagens, [ID], (e, r) => (e ? rej(e) : res(r)))
       );
       let numeroLimpo = (WHATS || '').toString().trim().replace(/\D/g, '');
-      if (numeroLimpo && !numeroLimpo.startsWith('55'))
+
+      // Garante que o número tem o prefixo do país
+      if (numeroLimpo && !numeroLimpo.startsWith('55')) {
         numeroLimpo = '55' + numeroLimpo;
-      if (!numeroLimpo || numeroLimpo.length < 12) {
+      }
+
+      // Um número brasileiro completo com nono dígito tem 13 caracteres (55 + DDD + 9 + 8 dígitos).
+      // Um número sem o nono dígito tem 12 caracteres (55 + DDD + 8 dígitos).
+      if (numeroLimpo.length === 13) {
+        // Se o número tem 13 caracteres, removemos o nono dígito, que é o terceiro após o DDD
+        const ddd = numeroLimpo.substring(2, 4); // Pega '51'
+        const numeroSemNonoDigito = numeroLimpo.substring(5); // Pega '82576987'
+
+        numeroLimpo = `55${ddd}${numeroSemNonoDigito}`; // Junta tudo: '555182576987'
+        console.log(
+          `[INFO] Nono dígito removido para normalização: ${WHATS} -> ${numeroLimpo}`
+        );
+      }
+
+      // A validação final agora deve checar por 12 caracteres.
+      if (!numeroLimpo || numeroLimpo.length !== 12) {
         await atualizarStatusTarefa(
           ID,
           'ERRO',
-          'Numero invalido ou incompleto'
+          `Numero invalido ou fora do padrao: ${numeroLimpo}`
         );
         continue;
       }
