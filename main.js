@@ -11,6 +11,7 @@ const qrcode = require('qrcode');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const express = require('express');
 const Firebird = require('node-firebird');
+const findChrome = require('chrome-finder');
 
 // Variáveis globais que serão definidas depois
 let dbOptions;
@@ -407,33 +408,13 @@ function setupAckHandler(client) {
 }
 
 function startWhatsApp(customChromePath = null) {
-  let browserPath;
-
-  if (customChromePath) {
-    // 1. Prioridade máxima: o caminho definido no .env
-    console.log(
-      `🔵 Usando caminho do Chrome definido no .env: ${customChromePath}`
-    );
-    browserPath = customChromePath;
-  } else if (app.isPackaged) {
-    // 2. Se estiver empacotado e sem .env, usa o Chromium interno
-    console.log('📦 App está empacotado. Usando Chromium interno.');
-    browserPath = path.join(
-      process.resourcesPath,
-      'puppeteer/chrome-win/chrome.exe'
-    );
-  } else {
-    // 3. Em modo de desenvolvimento, deixa o Puppeteer decidir
-    console.log(
-      '🔧 Modo de desenvolvimento. Puppeteer irá gerenciar o navegador.'
-    );
-    browserPath = undefined;
-  }
+  
+  const chromePath = findChrome();
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: sessionPath }),
     puppeteer: {
-      executablePath: browserPath,
+      executablePath: chromePath,
       headless: app.isPackaged, // Fica visível em dev, oculto em produção
       args: [
         '--no-sandbox',
@@ -475,7 +456,13 @@ function startWhatsApp(customChromePath = null) {
 
   client.on('disconnected', () => {
     isWhatsAppReady = false;
+
+    if (tray) {
+      tray.setToolTip('Monitor WhatsApp - Reconectando...');
+    }
+
     console.log('🔁 Desconectado, reconectando...');
+
     client
       .destroy()
       .catch((err) => console.error('Erro ao destruir cliente:', err));
@@ -504,37 +491,62 @@ function startWhatsApp(customChromePath = null) {
 
 let mainWindow;
 
+// ==============================================================================
+//           SUBSTITUA SUA FUNÇÃO createTray PELA VERSÃO CORRIGIDA
+// ==============================================================================
 function createTray() {
+  // Isso impede a criação de múltiplos ícones.
+  if (tray) {
+    return;
+  }
+
   const iconName = 'trayIcon.png';
   const iconPath = app.isPackaged
     ? path.join(process.resourcesPath, 'assets', iconName)
     : path.join(__dirname, 'assets', iconName);
+
+  // A variável global 'tray' é inicializada aqui.
   tray = new Tray(iconPath);
+
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Abrir console',
+      label: 'Abrir QR Code / Status', // Nome mais descritivo
       click: () => {
-        if (mainWindow) mainWindow.show();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show();
+        }
       },
     },
     {
       label: 'Sair',
       click: () => {
-        app.quit();
+        // Adiciona uma pequena lógica de confirmação para ser mais seguro
+        dialog
+          .showMessageBox({
+            type: 'question',
+            buttons: ['Sim', 'Não'],
+            defaultId: 1,
+            title: 'Confirmar Saída',
+            message: 'Você tem certeza que deseja fechar o Monitor WhatsApp?',
+          })
+          .then((response) => {
+            if (response.response === 0) {
+              // 'Sim' é o primeiro botão
+              app.quit();
+            }
+          });
       },
     },
   ]);
+
   tray.setContextMenu(contextMenu);
+  tray.setToolTip('Monitor WhatsApp - Inicializando...');
 }
 
 // =======================================================
 // 4. PONTO DE ENTRADA DO ELECTRON
 // =======================================================
 app.whenReady().then(() => {
-  // ETAPA 1: Verificar e configurar o .env.
-  // const envPath = app.isPackaged
-  //   ? path.join(path.dirname(app.getPath('exe')), '.env')
-  //   : path.join(__dirname, '.env');
 
   if (!fs.existsSync(envPath)) {
     const envTemplate = `# Configurações do Banco de Dados Firebird
@@ -565,7 +577,10 @@ app.whenReady().then(() => {
         `O arquivo de configuração (.env) foi criado em:\n\n${envPath}\n\nPor favor, edite-o e reinicie o programa.`
       );
     } catch (err) {
-      dialog.showErrorBox('Erro Crítico', `Não foi possível criar o arquivo .env: ${err.message}`);
+      dialog.showErrorBox(
+        'Erro Crítico',
+        `Não foi possível criar o arquivo .env: ${err.message}`
+      );
     }
     return app.quit();
   }
