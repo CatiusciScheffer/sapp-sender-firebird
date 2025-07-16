@@ -34,20 +34,50 @@ function getRandomDelay() {
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-//função para tornar os textos únicos
-function generateInvisibleSuffix(length = 6) {
-  const invisibleChars = [
-    '\u200B', // Zero Width Space
-    '\u200C', // Zero Width Non-Joiner
-    '\u200D', // Zero Width Joiner
-    '\u2060', // Word Joiner
-    '\uFEFF', // Zero Width No-Break Space
-  ];
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+function makeUniqueText(originalText, length = 6) {
+  if (!originalText) {
+    return '';
   }
-  return result;
+
+  const invisibleChars = ['\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF'];
+
+  const generateSuffix = () => {
+    let suffix = '';
+    for (let i = 0; i < length; i++) {
+      suffix +=
+        invisibleChars[Math.floor(Math.random() * invisibleChars.length)];
+    }
+    return suffix;
+  };
+
+  const urlRegex = /(https?:\/\/|www\.)/g;
+  const match = urlRegex.exec(originalText);
+
+  // Cenário 1: Não há links no texto.
+  if (!match) {
+    return originalText + generateSuffix();
+  }
+
+  // Se um link foi encontrado, verificamos o número de palavras.
+  const words = originalText.trim().split(/\s+/);
+
+  // Cenário 2: O texto contém um link e também outras palavras.
+  // A estratégia mais segura é inserir após a primeira palavra.
+  if (words.length > 1) {
+    words[0] = words[0] + generateSuffix();
+    return words.join(' ');
+  }
+
+  // Cenário 3: O texto é APENAS o link.
+  // A melhor estratégia é inserir os caracteres logo após 'https://' ou 'www.'
+  if (words.length === 1) {
+    const prefix = match[0]; // Será 'https://' ou 'www.'
+    const restOfLink = originalText.substring(prefix.length);
+    return prefix + generateSuffix() + restOfLink;
+  }
+
+  // Fallback para qualquer caso não previsto (embora improvável)
+  return originalText + generateSuffix();
 }
 
 //função para tornar os arquivos unicos
@@ -240,7 +270,8 @@ async function processarFilaDoBanco() {
         }
 
         try {
-          const textoFinalUnico = textoParaEnviar + generateInvisibleSuffix();
+          // const textoFinalUnico = textoParaEnviar + generateInvisibleSuffix();
+          const textoFinalUnico = textoParaEnviar + makeUniqueText();
 
           const msg = await sendMessageAndCapture(chatId, textoFinalUnico);
           await registrarMensagemEnviada(
@@ -504,22 +535,22 @@ app.whenReady().then(() => {
 
   if (!fs.existsSync(envPath)) {
     const envTemplate = `# Configurações do Banco de Dados Firebird
-# Por favor, preencha as informações abaixo e reinicie a aplicação.
-DB_HOST=127.0.0.1
-DB_PORT=3050
-DB_PATH=C:\\caminho\\para\\seu\\banco.fdb
-DB_USER=
-DB_PASSWORD=
+    # Por favor, preencha as informações abaixo e reinicie a aplicação.
+    DB_HOST=127.0.0.1
+    DB_PORT=3050
+    DB_PATH=C:\\caminho\\para\\seu\\banco.fdb
+    DB_USER=
+    DB_PASSWORD=
 
-# Pausa em milissegundos entre envios
-MIN_SEND_DELAY_MS=2000
-MAX_SEND_DELAY_MS=5000
+    # Pausa em milissegundos entre envios
+    MIN_SEND_DELAY_MS=2000
+    MAX_SEND_DELAY_MS=5000
 
-# (OPCIONAL) Caminho para o executável do Chrome, caso o padrão falhe.
-# Use barras duplas no Windows (ex: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe)
-# Deixe em branco para usar o navegador interno do aplicativo.
-CHROME_EXEC_PATH=
-`;
+    # (OPCIONAL) Caminho para o executável do Chrome, caso o padrão falhe.
+    # Use barras duplas no Windows (ex: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe)
+    # Deixe em branco para usar o navegador interno do aplicativo.
+    CHROME_EXEC_PATH=
+    `;
     try {
       fs.writeFileSync(envPath, envTemplate);
       dialog.showErrorBox(
