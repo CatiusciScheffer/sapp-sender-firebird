@@ -20,6 +20,10 @@ let tray = null;
 let client;
 let isWhatsAppReady = false;
 
+const userDataPath = app.getPath('userData');
+const envPath = path.join(userDataPath, '.env');
+const sessionPath = path.join(userDataPath, 'wwebjs_auth');
+
 // =======================================================
 // 2. FUNÇÕES AUXILIARES E DE LÓGICA DE NEGÓCIO
 // =======================================================
@@ -402,7 +406,6 @@ function setupAckHandler(client) {
   });
 }
 
-// --- FUNÇÃO startWhatsApp ---
 function startWhatsApp(customChromePath = null) {
   let browserPath;
 
@@ -428,7 +431,7 @@ function startWhatsApp(customChromePath = null) {
   }
 
   client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'meu-app' }),
+    authStrategy: new LocalAuth({ dataPath: sessionPath }),
     puppeteer: {
       executablePath: browserPath,
       headless: app.isPackaged, // Fica visível em dev, oculto em produção
@@ -529,9 +532,9 @@ function createTray() {
 // =======================================================
 app.whenReady().then(() => {
   // ETAPA 1: Verificar e configurar o .env.
-  const envPath = app.isPackaged
-    ? path.join(path.dirname(app.getPath('exe')), '.env')
-    : path.join(__dirname, '.env');
+  // const envPath = app.isPackaged
+  //   ? path.join(path.dirname(app.getPath('exe')), '.env')
+  //   : path.join(__dirname, '.env');
 
   if (!fs.existsSync(envPath)) {
     const envTemplate = `# Configurações do Banco de Dados Firebird
@@ -552,16 +555,17 @@ app.whenReady().then(() => {
     CHROME_EXEC_PATH=
     `;
     try {
+      // Garante que o diretório de dados do usuário existe
+      if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+      }
       fs.writeFileSync(envPath, envTemplate);
       dialog.showErrorBox(
         'Configuração Necessária',
-        `O arquivo de configuração (.env) foi criado em:\n\n${envPath}\n\nPor favor, edite-o com os dados do seu banco e reinicie o programa.`
+        `O arquivo de configuração (.env) foi criado em:\n\n${envPath}\n\nPor favor, edite-o e reinicie o programa.`
       );
     } catch (err) {
-      dialog.showErrorBox(
-        'Erro Crítico',
-        `Não foi possível criar o arquivo .env: ${err.message}`
-      );
+      dialog.showErrorBox('Erro Crítico', `Não foi possível criar o arquivo .env: ${err.message}`);
     }
     return app.quit();
   }
