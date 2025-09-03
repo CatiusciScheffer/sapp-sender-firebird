@@ -20,6 +20,7 @@ let MAX_SEND_DELAY_MS;
 let tray = null;
 let client;
 let isWhatsAppReady = false;
+let isProcessingQueue = false;
 
 const userDataPath = app.getPath('userData');
 const envPath = path.join(userDataPath, '.env');
@@ -194,23 +195,34 @@ function sendMessageAndCapture(chatId, content) {
 }
 
 async function processarFilaDoBanco() {
-  if (!isWhatsAppReady) return;
+  // --- LÓGICA DA TRAVA ---
+  if (isProcessingQueue) {
+    console.log('[INFO] A fila já está sendo processada. Próxima verificação em 30s.');
+    return;
+  }
+  isProcessingQueue = true; // Ativa a trava
+  // -------------------------
 
+  if (!isWhatsAppReady) {
+    isProcessingQueue = false; // Libera a trava se o WhatsApp não estiver pronto
+    return;
+  }
+  
   const sqlSelectTarefas = `SELECT ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO FROM WHATS_ENVIADO WHERE SITUACAO_TAREFA = 'AGUARDANDO' ORDER BY ID`;
   let db;
 
   try {
-    db = await new Promise((res, rej) =>
-      Firebird.attach(dbOptions, (e, d) => (e ? rej(e) : res(d)))
-    );
-    const rows = await new Promise((res, rej) =>
-      db.query(sqlSelectTarefas, (e, r) => (e ? rej(e) : res(r)))
-    );
-    if (rows.length === 0) return;
+    db = await new Promise((res, rej) => Firebird.attach(dbOptions, (e, d) => (e ? rej(e) : res(d))));
+    const rows = await new Promise((res, rej) => db.query(sqlSelectTarefas, (e, r) => (e ? rej(e) : res(r))));
+    
+    // Se não há tarefas, não loga nada para não poluir o console
+    if (rows.length === 0) {
+      // Libera a trava e sai
+      isProcessingQueue = false;
+      return;
+    }
 
-    console.log(
-      `📨 Encontradas ${rows.length} tarefas pendentes. Processando uma a uma...`
-    );
+    console.log(`📨 Encontradas ${rows.length} tarefas pendentes. Processando uma a uma...`);
 
     for (const row of rows) {
       const { ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO } = row;
@@ -373,6 +385,8 @@ async function processarFilaDoBanco() {
     console.error('❌ Erro fatal ao processar a fila do banco de dados:', err);
   } finally {
     if (db) db.detach();
+    isProcessingQueue = false; 
+    console.log('✅ Processamento da fila concluído. Próxima verificação em 30s.');
   }
 }
 

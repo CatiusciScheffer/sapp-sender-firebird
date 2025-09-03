@@ -6,7 +6,9 @@
   "author": "Catiusci P. C. Scheffer <cpcscheffer@outlook.com>",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "run_start": "npm start",
+    "run_build": "npm run build"
   },
   "build": {
     "appId": "com.MonitorWhatsapp.whatsapp",
