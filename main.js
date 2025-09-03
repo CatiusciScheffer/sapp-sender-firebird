@@ -26,6 +26,34 @@ const userDataPath = app.getPath('userData');
 const envPath = path.join(userDataPath, '.env');
 const sessionPath = path.join(userDataPath, 'wwebjs_auth');
 
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Se não conseguimos o bloqueio, encerramos esta segunda instância.
+  app.quit();
+} else {
+  // Este evento será disparado na PRIMEIRA instância quando uma SEGUNDA tentar iniciar.
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    
+    // O primeiro argumento é o título e o segundo é o conteúdo.
+    dialog.showErrorBox(
+      'Aplicação em Execução',
+      'O Monitor WhatsApp já está rodando em segundo plano. Você pode acessá-lo pelo ícone ao lado do relógio.'
+    );
+
+    // Dar um "pisca-pisca" no ícone da bandeja para chamar atenção
+    if (tray && !tray.isDestroyed()) {
+      tray.setToolTip('O Monitor WhatsApp já está em execução aqui!');
+      tray.displayBalloon({
+        iconType: 'info',
+        title: 'Já estou aqui!',
+        content: 'O Monitor WhatsApp já está rodando em segundo plano.'
+      });
+    }
+
+  });
+}
+
 // =======================================================
 // 2. FUNÇÕES AUXILIARES E DE LÓGICA DE NEGÓCIO
 // =======================================================
@@ -423,16 +451,16 @@ function startWhatsApp(customChromePath = null) {
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: sessionPath }),
-    puppeteer: {
-      executablePath: chromePath,
-      headless: app.isPackaged, // Fica visível em dev, oculto em produção
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-extensions',
-        '--disable-gpu',
-      ],
-    },
+    // puppeteer: {
+    //   executablePath: chromePath,
+    //   headless: app.isPackaged, // Fica visível em dev, oculto em produção
+    //   args: [
+    //     '--no-sandbox',
+    //     '--disable-setuid-sandbox',
+    //     '--disable-extensions',
+    //     '--disable-gpu',
+    //   ],
+    // },
   });
 
   // O resto da sua função (client.on, etc) continua aqui...

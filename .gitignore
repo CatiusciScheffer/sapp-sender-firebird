@@ -15,4 +15,7 @@ Thumbs.db
 .wwebjs_cache/
 # pasta com executável
 dist/
+_dist/
+
+instruções.txt
 
