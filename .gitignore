@@ -12,6 +12,7 @@ npm-debug.log*
 Thumbs.db
 # Arquivos de sessão do whatsapp-web.js 
 .wwebjs_auth/
+.wwebjs_cache/
 # pasta com executável
 dist/
 
