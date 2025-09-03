@@ -20,7 +20,7 @@ let MAX_SEND_DELAY_MS;
 let tray = null;
 let client;
 let isWhatsAppReady = false;
-let isProcessingQueue = false;
+let isProcessingQueue = false; // Trava para evitar processamento concorrente
 
 const userDataPath = app.getPath('userData');
 const envPath = path.join(userDataPath, '.env');
@@ -196,15 +196,11 @@ function sendMessageAndCapture(chatId, content) {
 
 async function processarFilaDoBanco() {
   // --- LÓGICA DA TRAVA ---
-  if (isProcessingQueue) {
-    console.log('[INFO] A fila já está sendo processada. Próxima verificação em 30s.');
-    return;
-  }
-  isProcessingQueue = true; // Ativa a trava
-  // -------------------------
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
 
   if (!isWhatsAppReady) {
-    isProcessingQueue = false; // Libera a trava se o WhatsApp não estiver pronto
+    isProcessingQueue = false;
     return;
   }
   
@@ -288,7 +284,7 @@ async function processarFilaDoBanco() {
 
         try {
           // const textoFinalUnico = textoParaEnviar + generateInvisibleSuffix();
-          const textoFinalUnico = textoParaEnviar + makeUniqueText();
+          const textoFinalUnico = makeUniqueText(textoParaEnviar);
 
           const msg = await sendMessageAndCapture(chatId, textoFinalUnico);
           await registrarMensagemEnviada(
@@ -423,7 +419,7 @@ function setupAckHandler(client) {
 
 function startWhatsApp(customChromePath = null) {
   
-  const chromePath = findChrome();
+  const chromePath = findChrome() || customChromePath;
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: sessionPath }),
@@ -442,7 +438,11 @@ function startWhatsApp(customChromePath = null) {
   // O resto da sua função (client.on, etc) continua aqui...
   client.on('qr', async (qr) => {
     isWhatsAppReady = false;
+    
+    if (tray) tray.setToolTip('Monitor WhatsApp - Aguardando leitura do QR Code');
+
     const qrDataUrl = await qrcode.toDataURL(qr);
+    
     if (mainWindow) {
       mainWindow.webContents.send('qr', qrDataUrl);
       mainWindow.show();
@@ -451,8 +451,10 @@ function startWhatsApp(customChromePath = null) {
 
   client.on('ready', () => {
     console.log('✅ WhatsApp pronto');
-    tray.setToolTip('WhatsApp Web: conectado');
     isWhatsAppReady = true;
+    
+    if (tray) tray.setToolTip('Monitor WhatsApp - Conectado'); // <-- ToolTip
+    
     console.log('🚀 Iniciando verificação periódica do banco de dados...');
     processarFilaDoBanco();
     setInterval(processarFilaDoBanco, 30000);
@@ -460,20 +462,22 @@ function startWhatsApp(customChromePath = null) {
 
   client.on('authenticated', () => {
     console.log('🔐 Autenticado com sucesso');
+    
+    if (tray) tray.setToolTip('Monitor WhatsApp - Autenticado, conectando...'); // <-- ToolTip
+    
     if (mainWindow) mainWindow.hide();
   });
 
   client.on('auth_failure', (msg) => {
     isWhatsAppReady = false;
     console.error('❌ Falha na autenticação', msg);
+    if (tray) tray.setToolTip('Monitor WhatsApp - Falha na autenticação!'); // <-- ToolTip
   });
 
   client.on('disconnected', () => {
     isWhatsAppReady = false;
 
-    if (tray) {
-      tray.setToolTip('Monitor WhatsApp - Reconectando...');
-    }
+    if (tray) tray.setToolTip('Monitor WhatsApp - Falha na autenticação!'); // <-- ToolTip
 
     console.log('🔁 Desconectado, reconectando...');
 
@@ -572,7 +576,7 @@ app.whenReady().then(() => {
     DB_PASSWORD=
 
     # Pausa em milissegundos entre envios
-    MIN_SEND_DELAY_MS=2000
+    MIN_SEND_DELAY_MS=5000
     MAX_SEND_DELAY_MS=5000
 
     # (OPCIONAL) Caminho para o executável do Chrome, caso o padrão falhe.
