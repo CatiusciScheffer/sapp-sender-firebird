@@ -27,7 +27,7 @@
 
 - `atualizarStatusTarefa(id, status, observacao)`Atualiza o status geral da tarefa no banco de dados.
 - `registrarMensagemEnviada(idEnvio, msgId, tipo, conteudo)`Registra cada mensagem individual enviada para rastreamento.
-- `atualizarStatusAck(msgSerializedId, status)`
+- `updateAckStatus(msgSerializedId, status)`
   Atualiza o status da mensagem com base nos eventos de ACK recebidos do WhatsApp.
 
 ## 💡 Recursos Avançados
