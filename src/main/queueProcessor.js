@@ -1,12 +1,15 @@
 const path = require('path');
 const fs = require('fs');
 const { getRandomDelay, pause } = require('./utils/helpers');
-const { makeUniqueText, createUniqueFileCopy } = require('./utils/uniqueContent');
-
+const {
+  makeUniqueText,
+  createUniqueFileCopy,
+} = require('./utils/uniqueContent');
+const { normalizePhoneNumber } = require('./utils/formatter');
 
 const dependencies = {
   db: null,
-  wa: null
+  wa: null,
 };
 
 let isProcessingQueue = false;
@@ -32,36 +35,25 @@ async function processQueue() {
       `📨 Encontradas ${tasks.length} tarefas pendentes. Processando uma a uma...`
     );
 
-    const client = dependencies.wa.getClient(); 
+    const client = dependencies.wa.getClient();
 
     for (const task of tasks) {
       const { ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO } = task;
       await dependencies.db.updateTaskStatus(ID, 'PROCESSANDO');
 
-      const mensagensJaEnviadas = await dependencies.db.fetchSentMessagesForTask(ID);
+      const mensagensJaEnviadas =
+        await dependencies.db.fetchSentMessagesForTask(ID);
 
-      let numeroLimpo = (WHATS || '').toString().trim().replace(/\D/g, '');
-      if (numeroLimpo && !numeroLimpo.startsWith('55'))
-        numeroLimpo = '55' + numeroLimpo;
-      if (numeroLimpo.length === 13) {
-        const ddd = numeroLimpo.substring(2, 4);
-        const numeroSemNonoDigito = numeroLimpo.substring(5);
-        numeroLimpo = `55${ddd}${numeroSemNonoDigito}`;
-        console.log(
-          `[INFO] Nono dígito removido para normalização: ${WHATS} -> ${numeroLimpo}`
-        );
-      }
+      const phoneResult = normalizePhoneNumber(WHATS);
 
-      if (!numeroLimpo || numeroLimpo.length !== 12) {
-        await dependencies.db.updateTaskStatus(
-          ID,
-          'ERRO',
-          `Numero invalido ou fora do padrao: ${numeroLimpo}`
-        );
+      if (!phoneResult.isValid) {
+        await dependencies.db.updateTaskStatus(ID, 'ERRO', phoneResult.error);
         continue;
       }
 
+      const numeroLimpo = phoneResult.number; 
       const chatId = numeroLimpo + '@c.us';
+
       const assuntoLimpo = (ASSUNTO || '').toString('utf-8').trim();
       const textoLimpo = (TEXTO || '').toString('utf-8').trim();
       let textoParaEnviar =
@@ -90,7 +82,10 @@ async function processQueue() {
 
         try {
           const textoFinalUnico = makeUniqueText(textoParaEnviar);
-          const msg = await dependencies.wa.sendMessageAndCapture(chatId, textoFinalUnico);
+          const msg = await dependencies.wa.sendMessageAndCapture(
+            chatId,
+            textoFinalUnico
+          );
           await dependencies.db.registerSentMessage(
             ID,
             msg.id._serialized,
@@ -135,8 +130,12 @@ async function processQueue() {
           let tempFilePath = null;
           try {
             tempFilePath = await createUniqueFileCopy(arquivoPath);
-            const media = dependencies.wa.MessageMedia.fromFilePath(tempFilePath);
-            const msg = await dependencies.wa.sendMessageAndCapture(chatId, media);
+            const media =
+              dependencies.wa.MessageMedia.fromFilePath(tempFilePath);
+            const msg = await dependencies.wa.sendMessageAndCapture(
+              chatId,
+              media
+            );
             await dependencies.db.registerSentMessage(
               ID,
               msg.id._serialized,
@@ -175,7 +174,11 @@ async function processQueue() {
       if (erros.length === 0 && totalOperacoes > 0) {
         await dependencies.db.updateTaskStatus(ID, 'CONCLUIDO');
       } else if (sucessos > 0) {
-        await dependencies.db.updateTaskStatus(ID, 'ERRO_PARCIAL', erros.join('; '));
+        await dependencies.db.updateTaskStatus(
+          ID,
+          'ERRO_PARCIAL',
+          erros.join('; ')
+        );
       } else {
         await dependencies.db.updateTaskStatus(ID, 'ERRO', erros.join('; '));
       }
@@ -192,7 +195,6 @@ async function processQueue() {
 
 function startQueueProcessing() {
   console.log('🚀 Iniciando verificação periódica da fila...');
-  // Roda uma vez imediatamente, depois a cada 30 segundos
   processQueue();
   setInterval(processQueue, 30000);
 }
