@@ -1,6 +1,6 @@
 {
   "name": "MonitorWhatsApp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "main.js",
   "description": "Um gateway para monitorar e enviar mensagens de WhatsApp a partir de um banco de dados.",
   "author": "Catiusci P. C. Scheffer <cpcscheffer@outlook.com>",
@@ -17,7 +17,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "trayIcon.ico"
+      "icon": "./assets/IconWhats.ico"
     },
     "nsis": {
       "oneClick": false,

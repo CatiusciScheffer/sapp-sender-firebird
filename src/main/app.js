@@ -20,7 +20,7 @@ function createTray() {
     return;
   }
 
-  const iconName = 'trayIcon.png';
+  const iconName = 'trayIcon.png';//icone do relógio
 
   console.log(`[DEBUG] Procurando icon em: ${iconName}`);
 
@@ -203,6 +203,7 @@ function initApp() {
       width: 350,
       height: 650,
       show: false,
+      icon: path.join(__dirname, '..', '..', 'assets', 'trayIcon.png'), //icone janela aplicativo
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
