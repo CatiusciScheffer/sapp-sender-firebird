@@ -40,6 +40,35 @@ function normalizePhoneNumber(originalNumber) {
   return { isValid: true, number: numeroLimpo, error: null };
 }
 
+/**
+ * Formata o texto vindo do banco de dados para ser compatível com o WhatsApp.
+ * - Substitui o caractere customizado de quebra de linha (¶) por '\n'.
+ * - Reforça quebras de linha duplas para evitar que o WhatsApp as junte.
+ * @param {string} rawText - O texto bruto vindo do banco de dados.
+ * @returns {string} O texto formatado pronto para envio.
+ */
+function formatWhatsAppMessage(rawText) {
+  if (!rawText) {
+    return '';
+  }
+
+  // Caractere invisível que usaremos para "ancorar" as quebras de linha duplas.
+  const zeroWidthSpace = '\u200B';
+  
+  // Converte o buffer/dado do banco para uma string. 'latin1' é seguro.
+  const textAsString = rawText.toString('latin1'); 
+
+  // Executa as substituições em cadeia.
+  // 1. **A PARTE MAIS IMPORTANTE:** Substitui todos os '¶' por '\n'.
+  return textAsString
+    .replace(/¶/g, '\n')
+    // 2. (Opcional, mas recomendado) Mantém a regra para quebras de linha padrão como segurança.
+    .replace(/\r\n?/g, '\n')
+    // 3. (Opcional, mas recomendado) Reforça as quebras de parágrafo.
+    .replace(/(\n){2,}/g, `\n${zeroWidthSpace}\n`);
+}
+
 module.exports = {
-  normalizePhoneNumber
+  normalizePhoneNumber,
+  formatWhatsAppMessage 
 };

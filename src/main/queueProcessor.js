@@ -5,7 +5,10 @@ const {
   makeUniqueText,
   createUniqueFileCopy,
 } = require('./utils/uniqueContent');
-const { normalizePhoneNumber } = require('./utils/formatter');
+const {
+  normalizePhoneNumber,
+  formatWhatsAppMessage,
+} = require('./utils/formatter');
 const dependencies = { db: null, wa: null };
 const { replaceShortcodesWithEmojis } = require('./utils/emojiProcessor');
 let isProcessingQueue = false;
@@ -31,7 +34,7 @@ async function processQueue() {
       `📨 Encontradas ${tasks.length} tarefas pendentes. Processando uma a uma...`
     );
 
-    const client = dependencies.wa.getClient();
+    // const client = dependencies.wa.getClient();
 
     for (const task of tasks) {
       const { ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO } = task;
@@ -47,18 +50,25 @@ async function processQueue() {
         continue;
       }
 
-      const numeroLimpo = phoneResult.number;
-      const chatId = numeroLimpo + '@c.us';
+      const chatId = phoneResult.number + '@c.us';
 
-      const assuntoLimpo = (ASSUNTO || '').toString('utf-8').trim();
-      const textoLimpo = (TEXTO || '').toString('utf-8').trim();
+      const assuntoFormatado = formatWhatsAppMessage(
+        (ASSUNTO || '').toString('utf-8')
+      ).trim();
+
+      const textoFormatado = formatWhatsAppMessage(
+        (TEXTO || '').toString('utf-8')
+      ).trim();
+
       let textoParaEnviar =
-        assuntoLimpo && textoLimpo
-          ? `*${assuntoLimpo}*\n\n${textoLimpo}`
-          : assuntoLimpo || textoLimpo;
+        assuntoFormatado && textoFormatado
+          ? `*${assuntoFormatado}*\n\n${textoFormatado}`
+          : assuntoFormatado || textoFormatado;
 
+      console.log(textoParaEnviar);
       // Processa o texto para substituir os shortcodes por emojis reais
       const textoComEmojis = replaceShortcodesWithEmojis(textoParaEnviar);
+
       const listaDeArquivos = (ARQUIVO || '')
         .toString('utf-8')
         .trim()
@@ -86,11 +96,14 @@ async function processQueue() {
             textoFinalUnico
           );
           // No banco, salvamos o texto original para manter a integridade
+          const assuntoOriginal = (task.ASSUNTO || '').toString('utf-8');
+          const textoOriginal = (task.TEXTO || '').toString('utf-8');
+          const conteudoOriginalCompleto = assuntoOriginal + textoOriginal;
           await dependencies.db.registerSentMessage(
             ID,
             msg.id._serialized,
             'TEXTO',
-            textoParaEnviar
+            conteudoOriginalCompleto
           );
           sucessos++;
           const delay = getRandomDelay();
