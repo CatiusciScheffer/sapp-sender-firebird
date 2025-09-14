@@ -9,6 +9,7 @@ const wa = require('./core/whatsapp');
 const queue = require('./queueProcessor');
 const eventManager = require('./core/eventManager');
 const { initHelpers } = require('./utils/helpers');
+const { initializeEmojiMap } = require('./utils/emojiProcessor');
 
 let mainWindow;
 let tray = null;
@@ -20,9 +21,12 @@ function createTray() {
   }
 
   const iconName = 'trayIcon.png';
+
+  console.log(`[DEBUG] Procurando icon em: ${iconName}`);
+
   const iconPath = app.isPackaged
     ? path.join(process.resourcesPath, 'assets', iconName)
-    : path.join(__dirname, 'assets', iconName);
+    : path.join(app.getAppPath(), 'assets', iconName);
 
   // A variável global 'tray' é inicializada aqui.
   tray = new Tray(iconPath);
@@ -189,7 +193,7 @@ function initApp() {
 
     db.initDatabase();
     initHelpers();
-
+    initializeEmojiMap();
     queue.initQueueProcessor(db, wa);
     setupGlobalAckHandler();
 

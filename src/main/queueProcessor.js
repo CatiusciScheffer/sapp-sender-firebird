@@ -6,12 +6,8 @@ const {
   createUniqueFileCopy,
 } = require('./utils/uniqueContent');
 const { normalizePhoneNumber } = require('./utils/formatter');
-
-const dependencies = {
-  db: null,
-  wa: null,
-};
-
+const dependencies = { db: null, wa: null };
+const { replaceShortcodesWithEmojis } = require('./utils/emojiProcessor');
 let isProcessingQueue = false;
 
 function initQueueProcessor(databaseModule, whatsappModule) {
@@ -51,7 +47,7 @@ async function processQueue() {
         continue;
       }
 
-      const numeroLimpo = phoneResult.number; 
+      const numeroLimpo = phoneResult.number;
       const chatId = numeroLimpo + '@c.us';
 
       const assuntoLimpo = (ASSUNTO || '').toString('utf-8').trim();
@@ -60,6 +56,9 @@ async function processQueue() {
         assuntoLimpo && textoLimpo
           ? `*${assuntoLimpo}*\n\n${textoLimpo}`
           : assuntoLimpo || textoLimpo;
+
+      // Processa o texto para substituir os shortcodes por emojis reais
+      const textoComEmojis = replaceShortcodesWithEmojis(textoParaEnviar);
       const listaDeArquivos = (ARQUIVO || '')
         .toString('utf-8')
         .trim()
@@ -71,7 +70,7 @@ async function processQueue() {
       let sucessos = 0;
 
       const enviarTexto = async () => {
-        if (!textoParaEnviar) return;
+        if (!textoComEmojis) return;
         const jaEnviouTexto = mensagensJaEnviadas.some(
           (m) => m.TIPO_MSG === 'TEXTO'
         );
@@ -81,11 +80,12 @@ async function processQueue() {
         }
 
         try {
-          const textoFinalUnico = makeUniqueText(textoParaEnviar);
+          const textoFinalUnico = makeUniqueText(textoComEmojis);
           const msg = await dependencies.wa.sendMessageAndCapture(
             chatId,
             textoFinalUnico
           );
+          // No banco, salvamos o texto original para manter a integridade
           await dependencies.db.registerSentMessage(
             ID,
             msg.id._serialized,
