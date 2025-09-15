@@ -68,7 +68,23 @@ function formatWhatsAppMessage(rawText) {
     .replace(/(\n){2,}/g, `\n${zeroWidthSpace}\n`);
 }
 
+/**
+ * Isola os links em um texto, garantindo que eles fiquem em linhas separadas
+ * para melhor renderização no WhatsApp.
+ * @param {string} text - O texto que pode conter um ou mais links.
+ * @returns {string} O texto com os links formatados.
+ */
+function formatLinks(text) {
+  if (!text) return '';
+
+  // Expressão regular aprimorada para encontrar URLs completas
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+
+  return text.replace(urlRegex, '\n\n$& \n\n').trim();
+}
+
 module.exports = {
   normalizePhoneNumber,
-  formatWhatsAppMessage 
+  formatWhatsAppMessage,
+  formatLinks
 };

@@ -8,6 +8,7 @@ const {
 const {
   normalizePhoneNumber,
   formatWhatsAppMessage,
+  formatLinks,
 } = require('./utils/formatter');
 const dependencies = { db: null, wa: null };
 const { replaceShortcodesWithEmojis } = require('./utils/emojiProcessor');
@@ -34,8 +35,6 @@ async function processQueue() {
       `📨 Encontradas ${tasks.length} tarefas pendentes. Processando uma a uma...`
     );
 
-    // const client = dependencies.wa.getClient();
-
     for (const task of tasks) {
       const { ID, WHATS, TEXTO, ARQUIVO, ORDEM_ENVIO, ASSUNTO } = task;
       await dependencies.db.updateTaskStatus(ID, 'PROCESSANDO');
@@ -52,21 +51,33 @@ async function processQueue() {
 
       const chatId = phoneResult.number + '@c.us';
 
+      // --- NOVA LÓGICA DE SEPARAÇÃO DE TEXTO E LINK ---
       const assuntoFormatado = formatWhatsAppMessage(
-        (ASSUNTO || '').toString('utf-8')
+        (task.ASSUNTO || '').toString('utf-8')
       ).trim();
-
       const textoFormatado = formatWhatsAppMessage(
-        (TEXTO || '').toString('utf-8')
+        (task.TEXTO || '').toString('utf-8')
       ).trim();
 
-      let textoParaEnviar =
-        assuntoFormatado && textoFormatado
-          ? `*${assuntoFormatado}*\n\n${textoFormatado}`
-          : assuntoFormatado || textoFormatado;
+      // Expressão regular para encontrar e EXTRAIR o primeiro link
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/;
+      const linkMatch = textoFormatado.match(urlRegex);
 
-      console.log(textoParaEnviar);
-      // Processa o texto para substituir os shortcodes por emojis reais
+      let linkParaEnviar = null;
+      let textoPrincipal = textoFormatado;
+
+      if (linkMatch) {
+        linkParaEnviar = linkMatch[0];
+        // Remove o link do texto principal para enviá-lo separadamente
+        textoPrincipal = textoFormatado.replace(linkParaEnviar, '').trim();
+      }
+
+      // Compõe a mensagem principal (agora sem o link)
+      let textoParaEnviar =
+        assuntoFormatado && textoPrincipal
+          ? `*${assuntoFormatado}*\n\n${textoPrincipal}`
+          : assuntoFormatado || textoPrincipal;
+
       const textoComEmojis = replaceShortcodesWithEmojis(textoParaEnviar);
 
       const listaDeArquivos = (ARQUIVO || '')
@@ -79,12 +90,23 @@ async function processQueue() {
       let erros = [];
       let sucessos = 0;
 
-      const enviarTexto = async () => {
-        if (!textoComEmojis) return;
-        const jaEnviouTexto = mensagensJaEnviadas.some(
-          (m) => m.TIPO_MSG === 'TEXTO'
+      // Guarda o texto original completo para a verificação de "já enviado"
+      const conteudoOriginalCompleto = (
+        (task.ASSUNTO || '') + (task.TEXTO || '')
+      ).toString('utf-8');
+
+      // --- NOVAS FUNÇÕES DE ENVIO SEPARADAS ---
+
+      const enviarTextoPrincipal = async () => {
+        if (!textoComEmojis.trim()) return; // Não envia se o texto principal ficou vazio
+
+        // Verifica se o texto JÁ foi enviado
+        const jaEnviou = mensagensJaEnviadas.some(
+          (m) =>
+            m.TIPO_MSG === 'TEXTO' &&
+            m.CONTEUDO.toString('utf-8') === conteudoOriginalCompleto
         );
-        if (jaEnviouTexto) {
+        if (jaEnviou) {
           sucessos++;
           return;
         }
@@ -95,10 +117,6 @@ async function processQueue() {
             chatId,
             textoFinalUnico
           );
-          // No banco, salvamos o texto original para manter a integridade
-          const assuntoOriginal = (task.ASSUNTO || '').toString('utf-8');
-          const textoOriginal = (task.TEXTO || '').toString('utf-8');
-          const conteudoOriginalCompleto = assuntoOriginal + textoOriginal;
           await dependencies.db.registerSentMessage(
             ID,
             msg.id._serialized,
@@ -108,13 +126,44 @@ async function processQueue() {
           sucessos++;
           const delay = getRandomDelay();
           console.log(
-            `📤 Texto enviado (ID: ${ID}). Pausando por ${(
+            `📤 Texto principal enviado (ID: ${ID}). Pausando por ${(
               delay / 1000
             ).toFixed(1)}s...`
           );
           await pause(delay);
         } catch (err) {
-          erros.push(`Texto: ${err.message}`);
+          erros.push(`Texto principal: ${err.message}`);
+        }
+      };
+
+      const enviarLinkSeparado = async () => {
+        if (!linkParaEnviar) return;
+
+        // A lógica de "já enviado" para o link pode ser mais simples
+        // ou podemos assumir que se o texto foi enviado, o link também foi.
+
+        try {
+          // O link é enviado "puro", sem caracteres invisíveis para garantir o preview
+          const msg = await dependencies.wa.sendMessageAndCapture(
+            chatId,
+            linkParaEnviar
+          );
+          await dependencies.db.registerSentMessage(
+            ID,
+            msg.id._serialized,
+            'LINK',
+            linkParaEnviar
+          );
+          sucessos++;
+          const delay = getRandomDelay();
+          console.log(
+            `📤 Link enviado (ID: ${ID}). Pausando por ${(delay / 1000).toFixed(
+              1
+            )}s...`
+          );
+          await pause(delay);
+        } catch (err) {
+          erros.push(`Link: ${err.message}`);
         }
       };
 
@@ -177,9 +226,11 @@ async function processQueue() {
 
       if (ORDEM_ENVIO === 1) {
         await enviarArquivos();
-        await enviarTexto();
+        await enviarTextoPrincipal();
+        await enviarLinkSeparado();
       } else {
-        await enviarTexto();
+        await enviarTextoPrincipal();
+        await enviarLinkSeparado();
         await enviarArquivos();
       }
 
