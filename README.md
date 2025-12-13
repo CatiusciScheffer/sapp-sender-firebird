@@ -1,20 +1,18 @@
 # 📲 SAPP Sender Firebird
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-green) ![Firebird](https://img.shields.io/badge/Firebird-2.5%2B-red) ![Backend](https://img.shields.io/badge/Backend-Service-blue) ![ERP](https://img.shields.io/badge/ERP-Integration-purple) ![License](https://img.shields.io/badge/License-MIT-blue) ![Architecture](https://img.shields.io/badge/Architecture-Queue--Based-orange) ![Async](https://img.shields.io/badge/Processing-Asynchronous-success) ![Legacy](https://img.shields.io/badge/Legacy%20Systems-Compatible-lightgrey)
-
-#### 🔎 Palavras-chave
-
-Node.js · Firebird · Backend · Integração ERP · WhatsApp API · Processamento Assíncrono · Fila de Mensagens · Sistemas Legados · SQL · Automação · Serviços Backend · Enterprise Software
-
-#### 📍 **Tags do repositório**
-
-nodejs firebird backend erp whatsapp integration queue asynchronous legacy-systems sql automation
-
-## 💡 Visão Geral do Projeto
-
 > **Serviço de envio de mensagens WhatsApp a partir de uma fila em banco Firebird** , com processamento assíncrono, controle de status e foco em integração com sistemas legados.
 
 Este projeto foi desenvolvido para resolver um problema comum em ERPs e sistemas corporativos:  **enviar mensagens de WhatsApp de forma confiável, desacoplada e rastreável** , utilizando uma base Firebird como fila de mensagens.
+
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-green) ![Firebird](https://img.shields.io/badge/Firebird-2.5%2B-red) ![Backend](https://img.shields.io/badge/Backend-Service-blue) ![ERP](https://img.shields.io/badge/ERP-Integration-purple) ![License](https://img.shields.io/badge/License-MIT-blue) ![Architecture](https://img.shields.io/badge/Architecture-Queue--Based-orange) ![Async](https://img.shields.io/badge/Processing-Asynchronous-success) ![Legacy](https://img.shields.io/badge/Legacy%20Systems-Compatible-lightgrey)
+
+**🔎 Palavras-chave**
+
+Node.js · Firebird · Backend · Integração ERP · WhatsApp API · Processamento Assíncrono · Fila de Mensagens · Sistemas Legados · SQL · Automação · Serviços Backend · Enterprise Software
+
+📍 **Tags do repositório**
+
+nodejs firebird backend erp whatsapp integration queue asynchronous legacy-systems sql automation
 
 ---
 
