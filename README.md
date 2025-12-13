@@ -214,9 +214,9 @@ Contribuições são bem-vindas!
 
 * GitHub: [https://github.com/CatiusciScheffer](https://github.com/CatiusciScheffer)
 * LinkedIn: [Catiusci Pagnonceli Chaves Scheffer | LinkedIn](https://www.linkedin.com/in/catiuscipagnonceli-cienciasdacomputacao/)
+* Email: [cpcscheffer@outlook.com]()
 
 ---
-
 
 ## 📄 Licença
 
