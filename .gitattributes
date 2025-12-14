@@ -1,0 +1,7 @@
+# Força a linguagem real do projeto
+*.js linguist-language=JavaScript
+*.json linguist-language=JSON
+*.md linguist-language=Markdown
+
+# Ignora tudo que não deve contar
+node_modules/** linguist-ignore=true
