@@ -66,29 +66,55 @@ function createTray() {
   tray.setToolTip('Monitor WhatsApp - Inicializando...');
 }
 
+// function setupGlobalAckHandler() {
+//   eventManager.on('whatsapp-ack', async (data) => {
+//     const { msgId, ack } = data;
+//     let status;
+//     switch (ack) {
+//       case 1:
+//         status = 'ENVIADO_SERVIDOR';
+//         break;
+//       case 2:
+//         status = 'ENTREGUE';
+//         break;
+//       case 3:
+//         status = 'VISUALIZADO';
+//         break;
+//       case -1:
+//         status = 'FALHA_ENVIO';
+//         break;
+//       default:
+//         return;
+//     }
+
+//     try {
+//       // Agora ele chama db.updateAckStatus com segurança
+//       await db.updateAckStatus(msgId, status);
+//       console.log(`📌 ACK atualizado: ${msgId} → ${status}`);
+//     } catch (err) {
+//       console.error(`❌ Erro ao atualizar ACK no banco:`, err.message);
+//     }
+//   });
+// }
+
 function setupGlobalAckHandler() {
-  eventManager.on('whatsapp-ack', async (data) => {
-    const { msgId, ack } = data;
-    let status;
-    switch (ack) {
-      case 1:
-        status = 'ENVIADO_SERVIDOR';
-        break;
-      case 2:
-        status = 'ENTREGUE';
-        break;
-      case 3:
-        status = 'VISUALIZADO';
-        break;
-      case -1:
-        status = 'FALHA_ENVIO';
-        break;
-      default:
-        return;
+  eventManager.on('whatsapp-ack', async ({ msgId, ack }) => {
+
+    let statusMap = {
+      0: 'CRIADA_LOCAL',
+      1: 'ENVIADA_SERVIDOR',
+      2: 'ENTREGUE',
+      3: 'VISUALIZADA'
+    };
+
+    const status = statusMap[ack];
+
+    if (!status) {
+      console.warn(`⚠️ ACK ignorado (${ack}) para ${msgId}`);
+      return;
     }
 
     try {
-      // Agora ele chama db.updateAckStatus com segurança
       await db.updateAckStatus(msgId, status);
       console.log(`📌 ACK atualizado: ${msgId} → ${status}`);
     } catch (err) {
@@ -96,6 +122,7 @@ function setupGlobalAckHandler() {
     }
   });
 }
+
 
 function initApp() {
   app.disableHardwareAcceleration();

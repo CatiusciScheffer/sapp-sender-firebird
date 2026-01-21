@@ -113,7 +113,7 @@ async function processQueue() {
 
         try {
           const textoFinalUnico = makeUniqueText(textoComEmojis);
-          const msg = await dependencies.wa.sendMessageAndCapture(
+          const msg = await dependencies.wa.sendMessageSafe(
             chatId,
             textoFinalUnico
           );
@@ -133,7 +133,7 @@ async function processQueue() {
           await pause(delay);
         } catch (err) {
           erros.push(`Texto principal: ${err.message}`);
-        }
+        }        
       };
 
       const enviarLinkSeparado = async () => {
@@ -144,7 +144,7 @@ async function processQueue() {
 
         try {
           // O link é enviado "puro", sem caracteres invisíveis para garantir o preview
-          const msg = await dependencies.wa.sendMessageAndCapture(
+          const msg = await dependencies.wa.sendMessageSafe(
             chatId,
             linkParaEnviar
           );
@@ -194,7 +194,7 @@ async function processQueue() {
             tempFilePath = await createUniqueFileCopy(arquivoPath);
             const media =
               dependencies.wa.MessageMedia.fromFilePath(tempFilePath);
-            const msg = await dependencies.wa.sendMessageAndCapture(
+            const msg = await dependencies.wa.sendMessageSafe(
               chatId,
               media
             );

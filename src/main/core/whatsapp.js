@@ -14,44 +14,56 @@ function isReady() {
   return isWhatsAppReady;
 }
 
-function sendMessageAndCapture(chatId, content) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      client.removeListener('message_create', listener);
-      reject(
-        new Error('Timeout: Evento message_create não foi capturado a tempo.')
-      );
-    }, 15000);
+// function sendMessageAndCapture(chatId, content) {
+//   return new Promise((resolve, reject) => {
+//     const timeout = setTimeout(() => {
+//       client.removeListener('message_create', listener);
+//       reject(
+//         new Error('Timeout: Evento message_create não foi capturado a tempo.')
+//       );
+//     }, 15000);
 
-    const listener = (msg) => {
-      // Adicionando logs para depuração
-      console.log(
-        `[DEBUG] message_create recebido: De: ${msg.fromMe}, Para: ${msg.to}`
-      );
-      console.log(`[DEBUG] Comparando com: fromMe: true, Para: ${chatId}`);
+//     const listener = (msg) => {
+//       // Adicionando logs para depuração
+//       console.log(
+//         `[DEBUG] message_create recebido: De: ${msg.fromMe}, Para: ${msg.to}`
+//       );
+//       console.log(`[DEBUG] Comparando com: fromMe: true, Para: ${chatId}`);
 
-      // Condição simplificada e mais robusta
-      if (msg.fromMe && msg.to === chatId) {
-        console.log(
-          `[DEBUG] Mensagem correspondente encontrada! ID: ${msg.id._serialized}`
-        );
-        clearTimeout(timeout);
-        client.removeListener('message_create', listener);
-        resolve(msg);
-      }
-    };
+//       // Condição simplificada e mais robusta
+//       if (msg.fromMe && msg.to === chatId) {
+//         console.log(
+//           `[DEBUG] Mensagem correspondente encontrada! ID: ${msg.id._serialized}`
+//         );
+//         clearTimeout(timeout);
+//         client.removeListener('message_create', listener);
+//         resolve(msg);
+//       }
+//     };
 
-    client.on('message_create', listener);
+//     client.on('message_create', listener);
 
-    // Agora, apenas disparamos o envio, sem o .then() para a flag
-    client.sendMessage(chatId, content).catch((err) => {
-      // Se o envio inicial falhar, limpamos e rejeitamos
-      clearTimeout(timeout);
-      client.removeListener('message_create', listener);
-      reject(err);
-    });
-  });
+//     // Agora, apenas disparamos o envio, sem o .then() para a flag
+//     client.sendMessage(chatId, content).catch((err) => {
+//       // Se o envio inicial falhar, limpamos e rejeitamos
+//       clearTimeout(timeout);
+//       client.removeListener('message_create', listener);
+//       reject(err);
+//     });
+//   });
+// }
+
+async function sendMessageSafe(chatId, content, options = {}) {
+  const msg = await client.sendMessage(chatId, content, options);
+
+  if (!msg || !msg.id || !msg.id._serialized) {
+    throw new Error('Mensagem enviada sem ID');
+  }
+
+  return msg; // 🔥 retorna imediatamente, SEM timeout
 }
+
+
 
 function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
   
@@ -72,7 +84,6 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
     },
   });
 
-  // O resto da sua função (client.on, etc) continua aqui...
   client.on('qr', async (qr) => {
     isWhatsAppReady = false;
 
@@ -85,10 +96,19 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
     }
   });
 
-   client.on('message_ack', (msg, ack) => {
-    if (msg && msg.id && msg.id._serialized) {
-      eventManager.emit('whatsapp-ack', { msgId: msg.id._serialized, ack });
-    }
+  // client.on('message_ack', (msg, ack) => {
+  //   if (msg && msg.id && msg.id._serialized) {
+  //     eventManager.emit('whatsapp-ack', { msgId: msg.id._serialized, ack });
+  //   }
+  // });
+
+  client.on('message_ack', (msg, ack) => {
+    if (!msg?.id?._serialized) return;
+
+    eventManager.emit('whatsapp-ack', {
+      msgId: msg.id._serialized,
+      ack
+    });
   });
 
   client.on('ready', () => {
@@ -149,6 +169,6 @@ module.exports = {
   startWhatsAppService,
   getClient,
   isReady,
-  sendMessageAndCapture,
+  sendMessageSafe,
   MessageMedia: require('whatsapp-web.js').MessageMedia// Re-exporta MessageMedia
 }
