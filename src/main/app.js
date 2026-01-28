@@ -33,7 +33,7 @@ function createTray() {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Abrir QR Code / Status', // Nome mais descritivo
+      label: 'Abrir QR Code / Status', 
       click: () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.show();
@@ -54,7 +54,6 @@ function createTray() {
           })
           .then((response) => {
             if (response.response === 0) {
-              // 'Sim' é o primeiro botão
               app.quit();
             }
           });
@@ -65,37 +64,6 @@ function createTray() {
   tray.setContextMenu(contextMenu);
   tray.setToolTip('Monitor WhatsApp - Inicializando...');
 }
-
-// function setupGlobalAckHandler() {
-//   eventManager.on('whatsapp-ack', async (data) => {
-//     const { msgId, ack } = data;
-//     let status;
-//     switch (ack) {
-//       case 1:
-//         status = 'ENVIADO_SERVIDOR';
-//         break;
-//       case 2:
-//         status = 'ENTREGUE';
-//         break;
-//       case 3:
-//         status = 'VISUALIZADO';
-//         break;
-//       case -1:
-//         status = 'FALHA_ENVIO';
-//         break;
-//       default:
-//         return;
-//     }
-
-//     try {
-//       // Agora ele chama db.updateAckStatus com segurança
-//       await db.updateAckStatus(msgId, status);
-//       console.log(`📌 ACK atualizado: ${msgId} → ${status}`);
-//     } catch (err) {
-//       console.error(`❌ Erro ao atualizar ACK no banco:`, err.message);
-//     }
-//   });
-// }
 
 function setupGlobalAckHandler() {
   eventManager.on('whatsapp-ack', async ({ msgId, ack }) => {
@@ -123,7 +91,6 @@ function setupGlobalAckHandler() {
   });
 }
 
-
 function initApp() {
   app.disableHardwareAcceleration();
 
@@ -137,7 +104,6 @@ function initApp() {
     console.error('-----------------------------');
 
     // Define o caminho para o arquivo de log na pasta de dados do usuário.
-    // É seguro chamar getPath aqui porque a exceção provavelmente ocorrerá após o 'ready'.
     const logPath = path.join(app.getPath('userData'), 'error.log');
     const errorDetails = `
     =========================================================
@@ -153,7 +119,6 @@ function initApp() {
     // Tenta salvar o erro em um arquivo de log
     try {
       fs.appendFileSync(logPath, errorDetails);
-      // Mostra uma mensagem amigável para o usuário ANTES de fechar.
       dialog.showErrorBox(
         'Erro Inesperado',
         `Ocorreu um erro inesperado e a aplicação precisa ser fechada.\n\nUm relatório do erro foi salvo em:\n${logPath}`
@@ -166,7 +131,6 @@ function initApp() {
         `Ocorreu um erro inesperado e não foi possível salvar o relatório de erro.\n\nErro Original: ${error.message}`
       );
     }
-
     // Encerra a aplicação de forma segura
     app.quit();
   });
@@ -238,11 +202,15 @@ function initApp() {
     });
 
     mainWindow.loadFile(path.join(app.getAppPath(), 'qr.html'));
-
+    
+    console.log('🔧 Configurando listener para "whatsapp-ready"...');
+    
     eventManager.on('whatsapp-ready', () => {
       console.log('🚀 Evento "whatsapp-ready" recebido. Iniciando a fila...');
       queue.startQueueProcessing();
     });
+    
+    console.log('🔧 Iniciando serviço WhatsApp...');
 
     createTray();
     wa.startWhatsAppService(isProduction, mainWindow, tray, eventManager);
@@ -258,7 +226,6 @@ function initApp() {
       const { number, text } = req.body;
       const chatId = number.includes('@c.us') ? number : number + '@c.us';
       try {
-        // Use o getter importado do módulo wa
         const client = wa.getClient();
         const msg = await client.sendMessage(chatId, text); // sendMessage direto é ok para a API
         res.json({ id: msg.id._serialized });

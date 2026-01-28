@@ -1,7 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const findChrome = require('chrome-finder');
 const qrcode = require('qrcode');
-const { sessionPath } = require('../config/paths'); 
+const { sessionPath } = require('../config/paths');
 const eventManager = require('./eventManager');
 
 let client;
@@ -14,45 +14,6 @@ function isReady() {
   return isWhatsAppReady;
 }
 
-// function sendMessageAndCapture(chatId, content) {
-//   return new Promise((resolve, reject) => {
-//     const timeout = setTimeout(() => {
-//       client.removeListener('message_create', listener);
-//       reject(
-//         new Error('Timeout: Evento message_create não foi capturado a tempo.')
-//       );
-//     }, 15000);
-
-//     const listener = (msg) => {
-//       // Adicionando logs para depuração
-//       console.log(
-//         `[DEBUG] message_create recebido: De: ${msg.fromMe}, Para: ${msg.to}`
-//       );
-//       console.log(`[DEBUG] Comparando com: fromMe: true, Para: ${chatId}`);
-
-//       // Condição simplificada e mais robusta
-//       if (msg.fromMe && msg.to === chatId) {
-//         console.log(
-//           `[DEBUG] Mensagem correspondente encontrada! ID: ${msg.id._serialized}`
-//         );
-//         clearTimeout(timeout);
-//         client.removeListener('message_create', listener);
-//         resolve(msg);
-//       }
-//     };
-
-//     client.on('message_create', listener);
-
-//     // Agora, apenas disparamos o envio, sem o .then() para a flag
-//     client.sendMessage(chatId, content).catch((err) => {
-//       // Se o envio inicial falhar, limpamos e rejeitamos
-//       clearTimeout(timeout);
-//       client.removeListener('message_create', listener);
-//       reject(err);
-//     });
-//   });
-// }
-
 async function sendMessageSafe(chatId, content, options = {}) {
   const msg = await client.sendMessage(chatId, content, options);
 
@@ -63,10 +24,7 @@ async function sendMessageSafe(chatId, content, options = {}) {
   return msg; // 🔥 retorna imediatamente, SEM timeout
 }
 
-
-
 function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
-  
   const customChromePath = process.env.CHROME_EXEC_PATH || null;
   const chromePath = findChrome() || customChromePath;
 
@@ -74,7 +32,7 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
     authStrategy: new LocalAuth({ dataPath: sessionPath }),
     puppeteer: {
       executablePath: chromePath,
-      headless: isProduction, 
+      headless: isProduction,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -89,35 +47,47 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
 
     if (tray) tray.setToolTip('...');
     const qrDataUrl = await qrcode.toDataURL(qr);
-    
+
     if (mainWindow) {
       mainWindow.webContents.send('qr', qrDataUrl);
       mainWindow.show();
     }
   });
 
-  // client.on('message_ack', (msg, ack) => {
-  //   if (msg && msg.id && msg.id._serialized) {
-  //     eventManager.emit('whatsapp-ack', { msgId: msg.id._serialized, ack });
-  //   }
-  // });
-
   client.on('message_ack', (msg, ack) => {
     if (!msg?.id?._serialized) return;
 
     eventManager.emit('whatsapp-ack', {
       msgId: msg.id._serialized,
-      ack
+      ack,
     });
   });
 
+  // Mantido para versões antigas
   client.on('ready', () => {
-    console.log('✅ WhatsApp pronto');
-    isWhatsAppReady = true;
-    if (tray) tray.setToolTip('Monitor WhatsApp - Conectado');
-    
-    // A única responsabilidade é emitir o evento.
-    eventManager.emit('whatsapp-ready');
+    console.log('✅ WhatsApp pronto (evento "ready")');
+    if (!isWhatsAppReady) {
+      isWhatsAppReady = true;
+      if (tray) tray.setToolTip('Monitor WhatsApp - Conectado');
+      eventManager.emit('whatsapp-ready');
+    }
+  });
+
+  // Para versões novas
+  client.on('authenticated', () => {
+    console.log('🔐 Autenticado com sucesso');
+
+    // Se após 3 segundos o 'ready' não disparou, considere pronto aqui
+    setTimeout(() => {
+      if (!isWhatsAppReady) {
+        console.log(
+          '⚠️  Evento "ready" não disparou. Considerando pronto após autenticação.',
+        );
+        isWhatsAppReady = true;
+        if (tray) tray.setToolTip('Monitor WhatsApp - Conectado');
+        eventManager.emit('whatsapp-ready');
+      }
+    }, 3000);
   });
 
   client.on('authenticated', () => {
@@ -144,7 +114,10 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
     client
       .destroy()
       .catch((err) => console.error('Erro ao destruir cliente:', err));
-    setTimeout(() => startWhatsAppService(isProduction, mainWindow, tray), 10000); 
+    setTimeout(
+      () => startWhatsAppService(isProduction, mainWindow, tray),
+      10000,
+    );
   });
 
   // Listener genérico de mensagens recebidas
@@ -158,8 +131,7 @@ function startWhatsAppService(isProduction, mainWindow, tray, eventManager) {
     console.error('FALHA FATAL NA INICIALIZAÇÃO DO CLIENTE:', err);
     dialog.showErrorBox(
       'Erro Crítico',
-      'Não foi possível iniciar o WhatsApp...\n' +
-        err.message
+      'Não foi possível iniciar o WhatsApp...\n' + err.message,
     );
     app.quit();
   });
@@ -170,5 +142,5 @@ module.exports = {
   getClient,
   isReady,
   sendMessageSafe,
-  MessageMedia: require('whatsapp-web.js').MessageMedia// Re-exporta MessageMedia
-}
+  MessageMedia: require('whatsapp-web.js').MessageMedia, // Re-exporta MessageMedia
+};

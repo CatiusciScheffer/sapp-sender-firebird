@@ -51,7 +51,7 @@ async function processQueue() {
 
       const chatId = phoneResult.number + '@c.us';
 
-      // --- NOVA LÓGICA DE SEPARAÇÃO DE TEXTO E LINK ---
+      // --- SEPARAÇÃO DE TEXTO E LINK ---
       const assuntoFormatado = formatWhatsAppMessage(
         (task.ASSUNTO || '').toString('utf-8')
       ).trim();
@@ -95,7 +95,7 @@ async function processQueue() {
         (task.ASSUNTO || '') + (task.TEXTO || '')
       ).toString('utf-8');
 
-      // --- NOVAS FUNÇÕES DE ENVIO SEPARADAS ---
+      // --- FUNÇÕES DE ENVIO SEPARADAS ---
 
       const enviarTextoPrincipal = async () => {
         if (!textoComEmojis.trim()) return; // Não envia se o texto principal ficou vazio
